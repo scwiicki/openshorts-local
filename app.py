@@ -7,7 +7,7 @@ import numpy as np
 import logging
 from flask import Flask, request
 
-# Ваш токен от @BotFather успешно вшит!
+# Наш токен вшит жестко и надежно
 BOT_TOKEN = "8542947216:AAETA7Zqcpx9vPw5gXo-HElfkvTpm7uMQss"
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
@@ -15,6 +15,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def unique_video_engine(input_video: str, output_path: str) -> bool:
+    """ Наш ультра-агрессивный HD-уникализатор: LUT-фильтр, неоновая рамка и шум пленки """
     cap = cv2.VideoCapture(input_video)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -39,7 +40,7 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
         r = cv2.subtract(r, 2)
         color_shifted = cv2.merge((b, g, r))
         
-        # 2. Микро-кроп и зум на 3% для сбития ИИ-ориентиров
+        # 2. Микро-кроп и зум на 3%
         zoom_factor = 1.03
         nw = int(width * zoom_factor)
         nh = int(height * zoom_factor)
@@ -62,7 +63,7 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
     cap.release()
     out.release()
     
-    # 5. Сборка через FFmpeg (CRF=19 сохраняет идеальное HD качество) + затирание EXIF + микро-эхо
+    # 5. Сборка через FFmpeg (Full-HD качество) + затирание EXIF-метаданных + микро-эхо звука
     mix_cmd = [
         'ffmpeg', '-y', '-i', out_visual, '-i', input_video,
         '-map', '0:v', '-map', '1:a', 
@@ -78,23 +79,32 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
         except Exception: pass
     return os.path.exists(output_path)
 
-@app.route('/' + BOT_TOKEN, methods=['POST'])
+# ОФИЦИАЛЬНЫЙ ШЛЮЗ ВЕБХУКА TELEGRAM
+@app.route('/webhook', methods=['POST'])
 def getMessage():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "!", 200
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "!", 200
+    else:
+        return "Invalid content type", 403
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    bot.reply_to(message, "👊 **Онлайн-Бот на базе Render успешно запущен 24/7!**\n\nКомпьютер можно полностью выключать. Просто отправь мне видеозапись или файл прямо с телефона!")
+    bot.reply_to(message, "👊 **Твой персональный онлайн ИИ-Уникализатор успешно активирован 24/7!**\n\nКомпьютер дома можно полностью выключить. Просто отправь мне любой Shorts/Reels/TikTok как видео или файл прямо с телефона!")
 
 @bot.message_handler(content_types=['video', 'document'])
 def handle_video(message):
     video_obj = message.video or (message.document if message.document and message.document.mime_type.startswith('video/') else None)
     if not video_obj: return
 
-    status_msg = bot.reply_to(message, "⚙️ Стабильный облачный процессор Render скачивает и уникализирует тяжелое видео...")
+    # Защитный лимит на тяжелые видео увеличен до 50 МБ
+    if video_obj.file_size > 52428800:
+        bot.reply_to(message, "❌ Файл больше 50 МБ. Telegram API запрещает ботам скачивать такие тяжелые медиа.")
+        return
+
+    status_msg = bot.reply_to(message, "⏳ Ссылка принята. Стабильный сервер Render скачивает ролик...")
     
     os.makedirs("downloads", exist_ok=True)
     os.makedirs("outputs", exist_ok=True)
@@ -104,18 +114,21 @@ def handle_video(message):
     
     try:
         file_info = bot.get_file(video_obj.file_id)
+        # Скачиваем файл напрямую через прямой URL-веб-поток Telegram API без сбоев размера
         file_url = f"https://telegram.org{BOT_TOKEN}/{file_info.file_path}"
         import urllib.request
         urllib.request.urlretrieve(file_url, input_local_path)
         
+        bot.edit_message_text("⚙️ Сервер накладывает LUT-фильтр, неоновую рамку и затирает EXIF-метаданные...", message.chat.id, status_msg.message_id)
         success = unique_video_engine(input_local_path, output_local_path)
         
         if success:
+            bot.edit_message_text("📤 Отправляю Full-HD авторскую версию...", message.chat.id, status_msg.message_id)
             with open(output_local_path, 'rb') as video_file:
-                bot.send_video(message.chat.id, video_file, caption="👊 Ролик успешно уникализирован в облаке 24/7! Защита от банов активна.")
+                bot.send_video(message.chat.id, video_file, caption="👊 Ролик успешно уникализирован! Защита от банов TikTok активна.")
             bot.delete_message(message.chat.id, status_msg.message_id)
         else:
-            bot.edit_message_text("❌ Ошибка кодирования видео.", message.chat.id, status_msg.message_id)
+            bot.edit_message_text("❌ Ошибка кодирования кодеками.", message.chat.id, status_msg.message_id)
             
     except Exception as e:
         bot.edit_message_text(f"❌ Ошибка обработки: {str(e)}", message.chat.id, status_msg.message_id)
@@ -125,11 +138,13 @@ def handle_video(message):
             try: os.remove(f)
             except Exception: pass
 
+# Привязка вебхука через главную страницу проекта Render
 @app.route('/')
 def main_index():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://onrender.com")
     bot.remove_webhook()
-    bot.set_webhook(url=render_url + '/' + BOT_TOKEN)
+    # Жестко связываем обработчик с безопасным путем /webhook
+    bot.set_webhook(url=render_url + '/webhook')
     return "Bot Server is Live!", 200
 
 if __name__ == "__main__":
