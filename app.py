@@ -5,9 +5,9 @@ import telebot
 import subprocess
 import numpy as np
 import logging
+import urllib.request
 from flask import Flask, request
 
-# Наш токен вшит жестко и надежно
 BOT_TOKEN = "8542947216:AAETA7Zqcpx9vPw5gXo-HElfkvTpm7uMQss"
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 app = Flask(__name__)
@@ -63,7 +63,7 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
     cap.release()
     out.release()
     
-    # 5. Сборка через FFmpeg (Full-HD качество) + затирание EXIF-метаданных + микро-эхо звука
+    # 5. Сборка через FFmpeg (CRF=19 сохраняет идеальное HD качество) + затирание EXIF + микро-эхо
     mix_cmd = [
         'ffmpeg', '-y', '-i', out_visual, '-i', input_video,
         '-map', '0:v', '-map', '1:a', 
@@ -79,7 +79,6 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
         except Exception: pass
     return os.path.exists(output_path)
 
-# ОФИЦИАЛЬНЫЙ ШЛЮЗ ВЕБХУКА TELEGRAM
 @app.route('/webhook', methods=['POST'])
 def getMessage():
     if request.headers.get('content-type') == 'application/json':
@@ -92,19 +91,18 @@ def getMessage():
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    bot.reply_to(message, "👊 **Твой персональный онлайн ИИ-Уникализатор успешно активирован 24/7!**\n\nКомпьютер дома можно полностью выключить. Просто отправь мне любой Shorts/Reels/TikTok как видео или файл прямо с телефона!")
+    bot.reply_to(message, "👊 **Онлайн-Бот на базе Render успешно запущен 24/7!**\n\nКомпьютер можно полностью выключать. Просто отправь мне любой Shorts/Reels/TikTok как видео или файл прямо с телефона!")
 
 @bot.message_handler(content_types=['video', 'document'])
 def handle_video(message):
     video_obj = message.video or (message.document if message.document and message.document.mime_type.startswith('video/') else None)
     if not video_obj: return
 
-    # Защитный лимит на тяжелые видео увеличен до 50 МБ
     if video_obj.file_size > 52428800:
         bot.reply_to(message, "❌ Файл больше 50 МБ. Telegram API запрещает ботам скачивать такие тяжелые медиа.")
         return
 
-    status_msg = bot.reply_to(message, "⏳ Ссылка принята. Стабильный сервер Render скачивает ролик...")
+    status_msg = bot.reply_to(message, "⏳ Видео принято облаком Render. Запускаю глубокую HD-уникализацию...")
     
     os.makedirs("downloads", exist_ok=True)
     os.makedirs("outputs", exist_ok=True)
@@ -114,21 +112,17 @@ def handle_video(message):
     
     try:
         file_info = bot.get_file(video_obj.file_id)
-        # Скачиваем файл напрямую через прямой URL-веб-поток Telegram API без сбоев размера
         file_url = f"https://telegram.org{BOT_TOKEN}/{file_info.file_path}"
-        import urllib.request
         urllib.request.urlretrieve(file_url, input_local_path)
         
-        bot.edit_message_text("⚙️ Сервер накладывает LUT-фильтр, неоновую рамку и затирает EXIF-метаданные...", message.chat.id, status_msg.message_id)
         success = unique_video_engine(input_local_path, output_local_path)
         
         if success:
-            bot.edit_message_text("📤 Отправляю Full-HD авторскую версию...", message.chat.id, status_msg.message_id)
             with open(output_local_path, 'rb') as video_file:
-                bot.send_video(message.chat.id, video_file, caption="👊 Ролик успешно уникализирован! Защита от банов TikTok активна.")
+                bot.send_video(message.chat.id, video_file, caption="👊 Ролик успешно уникализирован 24/7! Защита от банов TikTok активна.")
             bot.delete_message(message.chat.id, status_msg.message_id)
         else:
-            bot.edit_message_text("❌ Ошибка кодирования кодеками.", message.chat.id, status_msg.message_id)
+            bot.edit_message_text("❌ Ошибка кодирования видео.", message.chat.id, status_msg.message_id)
             
     except Exception as e:
         bot.edit_message_text(f"❌ Ошибка обработки: {str(e)}", message.chat.id, status_msg.message_id)
@@ -138,12 +132,10 @@ def handle_video(message):
             try: os.remove(f)
             except Exception: pass
 
-# Привязка вебхука через главную страницу проекта Render
 @app.route('/')
 def main_index():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://onrender.com")
     bot.remove_webhook()
-    # Жестко связываем обработчик с безопасным путем /webhook
     bot.set_webhook(url=render_url + '/webhook')
     return "Bot Server is Live!", 200
 
