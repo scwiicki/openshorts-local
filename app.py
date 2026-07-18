@@ -15,7 +15,6 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 def unique_video_engine(input_video: str, output_path: str) -> bool:
-    """ Наш ультра-агрессивный HD-уникализатор: LUT-фильтр, неоновая рамка и шум пленки """
     cap = cv2.VideoCapture(input_video)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -34,13 +33,11 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
         ret, frame = cap.read()
         if not ret: break
         
-        # 1. Поканальный LUT-цветосдвиг пикселей кадра
         b, g, r = cv2.split(frame)
         b = cv2.add(b, 2)
         r = cv2.subtract(r, 2)
         color_shifted = cv2.merge((b, g, r))
         
-        # 2. Микро-кроп и зум на 3%
         zoom_factor = 1.03
         nw = int(width * zoom_factor)
         nh = int(height * zoom_factor)
@@ -49,10 +46,8 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
         y1 = (nh - height) // 2
         cropped_frame = resized[y1:y1+height, x1:x1+width]
         
-        # 3. Тонкая защитная неоновая рамка
         cv2.rectangle(cropped_frame, (0, 0), (width, height), (40, 40, 40), 4)
         
-        # 4. Наложение динамического цифрового шума пленки
         np.random.seed(frame_idx)
         noise = np.random.randint(-2, 3, (height, width, 3), dtype=np.int8)
         processed_frame = np.clip(cropped_frame.astype(np.int16) + noise, 0, 255).astype(np.uint8)
@@ -63,7 +58,6 @@ def unique_video_engine(input_video: str, output_path: str) -> bool:
     cap.release()
     out.release()
     
-    # 5. Сборка через FFmpeg (CRF=19 сохраняет идеальное HD качество) + затирание EXIF + микро-эхо
     mix_cmd = [
         'ffmpeg', '-y', '-i', out_visual, '-i', input_video,
         '-map', '0:v', '-map', '1:a', 
@@ -91,7 +85,7 @@ def getMessage():
 
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
-    bot.reply_to(message, "👊 **Онлайн-Бот на базе Render успешно запущен 24/7!**\n\nКомпьютер можно полностью выключать. Просто отправь мне любой Shorts/Reels/TikTok как видео или файл прямо с телефона!")
+    bot.reply_to(message, "👊 **Онлайн-Бот успешно запущен 24/7!**\n\nКомпьютер можно выключать. Просто отправь мне любой Shorts/Reels/TikTok как видео или файл прямо с телефона!")
 
 @bot.message_handler(content_types=['video', 'document'])
 def handle_video(message):
@@ -102,7 +96,7 @@ def handle_video(message):
         bot.reply_to(message, "❌ Файл больше 50 МБ. Telegram API запрещает ботам скачивать такие тяжелые медиа.")
         return
 
-    status_msg = bot.reply_to(message, "⏳ Видео принято облаком Render. Запускаю глубокую HD-уникализацию...")
+    status_msg = bot.reply_to(message, "⏳ Видео принято. Запускаю облачную HD-уникализацию...")
     
     os.makedirs("downloads", exist_ok=True)
     os.makedirs("outputs", exist_ok=True)
@@ -134,10 +128,17 @@ def handle_video(message):
 
 @app.route('/')
 def main_index():
+    return "Bot Server is Live!", 200
+
+# Команда для ручной принудительной установки вебхука без зацикливания
+@app.route('/set')
+def setup_webhook():
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "https://onrender.com")
     bot.remove_webhook()
+    import time
+    time.sleep(1)
     bot.set_webhook(url=render_url + '/webhook')
-    return "Bot Server is Live!", 200
+    return "Webhook successfully locked!", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
